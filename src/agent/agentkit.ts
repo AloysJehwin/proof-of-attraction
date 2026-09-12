@@ -1,10 +1,14 @@
+import { authedFetch } from '../auth/session';
+import { topUpAgent, TopUpResult } from '../wallet/topup';
+
 export type AgentActionKind = 'context' | 'icebreaker' | 'send';
 
 export type AgentCallResult = {
   ok: boolean;
-  verified: boolean;
+  registered: boolean;
   payload?: string;
   error?: string;
+  toppedUp?: TopUpResult;
 };
 
 const AGENT_API = process.env.EXPO_PUBLIC_AGENT_API ?? '';
@@ -20,20 +24,38 @@ export async function agentCall(
   if (!AGENTKIT_ENABLED || !args.walletAddress) {
     return simulateAgentCall(kind, args.matchName);
   }
+
+  const first = await requestAgent(kind, args);
+  if (first.status !== 402) return first.result;
+
+  const topup = await topUpAgent();
+  if (!topup.ok) {
+    return { ok: false, registered: false, error: topup.error ?? 'top-up failed' };
+  }
+  const retry = await requestAgent(kind, args);
+  return { ...retry.result, toppedUp: topup };
+}
+
+async function requestAgent(
+  kind: AgentActionKind,
+  args: { matchId: string; walletAddress: string | null },
+): Promise<{ status: number; result: AgentCallResult }> {
   try {
-    const res = await fetch(`${AGENT_API}/agent/${kind}`, {
+    const res = await authedFetch(`/agent/${kind}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-agent-wallet': args.walletAddress,
+        'x-agent-wallet': args.walletAddress ?? '',
         'x-agent-chain': WORLD_CHAIN,
       },
       body: JSON.stringify({ matchId: args.matchId }),
     });
-    const data = (await res.json()) as { verified: boolean; payload?: string };
-    return { ok: res.ok, verified: data.verified, payload: data.payload };
+    const data = (await res.json().catch(() => ({}))) as { registered?: boolean; payload?: string; error?: string };
+    return {
+      status: res.status,
+      result: { ok: res.ok, registered: Boolean(data.registered), payload: data.payload, error: data.error },
+    };
   } catch (e) {
-    return { ok: false, verified: false, error: e instanceof Error ? e.message : 'network error' };
+    return { status: 0, result: { ok: false, registered: false, error: e instanceof Error ? e.message : 'network error' } };
   }
 }
 
@@ -57,12 +79,12 @@ async function simulateAgentCall(kind: AgentActionKind, matchName: string): Prom
   if (kind === 'icebreaker') {
     const pool = ICEBREAKERS.warm;
     const line = pool[Math.floor(Math.random() * pool.length)].replace('{name}', matchName);
-    return { ok: true, verified: true, payload: line };
+    return { ok: true, registered: true, payload: line };
   }
   if (kind === 'context') {
-    return { ok: true, verified: true, payload: `Shared interests with ${matchName}: coffee, climbing.` };
+    return { ok: true, registered: true, payload: `Shared interests with ${matchName}: coffee, climbing.` };
   }
-  return { ok: true, verified: true };
+  return { ok: true, registered: true };
 }
 
 export function pickIcebreaker(style: 'warm' | 'witty' | 'direct', name: string): string {

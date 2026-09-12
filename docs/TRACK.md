@@ -34,15 +34,17 @@ So the user *sees* an in-chat agent; the *plumbing* is real x402 + AgentBook ver
 - "Sent by [Name]'s agent (World ID verified human)" disclosure banner in chat
 - Agent authorization screen: set preferences, icebreaker style, deal-breakers
 - Agent action log: user can review and revoke any agent action (backed by nonce/usage storage)
-- Free-trial mode: 3 free requests per registered human-backed agent before x402 payment fallback
+- Free-trial mode: 3 free requests per **verified human** (durable quota shared across all of that human's agents and sessions) before an x402-style payment fallback
+
+**Continuity model:** the free-trial quota is keyed to the authenticated human's Selfie Check nullifier, not to an agent wallet. A user's second or third agent draws down the same shared quota, and the count survives across sessions and serverless cold starts because it lives in Upstash Redis. This is the durable, per-human continuity the prize asks for.
 
 **Technical stack:**
 - `@worldcoin/agentkit` — agent client (`createAgentkitClient` → `agentkit.fetch()`)
 - `@worldcoin/agentkit-cli` — `register` / `status <agent-address>`
 - `createAgentBookVerifier`, `createAgentkitHooks`, `agentkitResourceServerExtension`, `declareAgentkitExtension` — server-side
-- x402 protocol with Hono backend (`@x402/hono`, `@x402/evm/exact/server`)
-- World Chain (`eip155:480`) for canonical AgentBook resolution; Base (`eip155:8453`) for payment fallback
-- Persistent `DatabaseAgentKitStorage` for usage counters and nonces (replay protection)
+- x402-style 402 boundary with Hono backend; settlement is a native testnet transfer (see On-chain settlement below)
+- World Chain (`eip155:480`) for canonical AgentBook resolution
+- Upstash Redis for durable per-human usage counters and nonces (replay protection), so quota persists on stateless Vercel
 
 **Qualification checklist:**
 - [x] Uses AgentKit in a meaningful way
@@ -50,6 +52,31 @@ So the user *sees* an in-chat agent; the *plumbing* is real x402 + AgentBook ver
 - [x] Registers and resolves agents through AgentBook
 - [x] Uses World ID Sandbox App for testing
 - [ ] Feedback document (see `docs/FEEDBACK_AGENTKIT.md`)
+
+---
+
+### Authentication flow
+
+There is no standalone "Sign in with World ID" session product; IDKit and Selfie Check produce a one-shot proof, not a session. Our flow:
+
+1. Client runs the Selfie Check proof and forwards the result to the backend (`POST /auth/selfie`).
+2. Backend verifies the proof and issues our own signed JWT keyed to the proof's nullifier hash. The nullifier is the stable user identity and is recorded in Redis for Sybil resistance (one account per verified human).
+3. Client stores the JWT in `expo-secure-store` and attaches it as a Bearer token to every protected request. Session lifecycle is ours to manage; `POST /auth/refresh` re-issues.
+
+The derived `humanId` from that nullifier is exactly the key the AgentKit quota counts against, tying agent continuity to the verified human.
+
+---
+
+### On-chain settlement (testnet only)
+
+The documented x402 USDC facilitator is World Chain mainnet only. This is a hackathon build, so all on-chain activity is **testnet only, never mainnet**. When the free-trial quota is exhausted, the agent settles the 402 with a native ETH transfer on **World Chain Sepolia (chain id 4801)** from a Privy embedded wallet:
+
+1. The 402 response carries the top-up target address, minimum value, and chain id.
+2. The user signs a native ETH transfer from their Privy embedded wallet via viem.
+3. The client reports the tx hash to `POST /agent/topup`; the backend verifies the receipt over the Sepolia RPC (recipient, minimum value, and unused hash for replay protection) and credits N more calls to that human's quota in Redis.
+4. The agent retries and resumes. A Worldscan Sepolia link is surfaced in the chat.
+
+Faucet (`alchemy.com/faucets/world-chain-sepolia`) is linked in-app so the demo wallet can be funded. Explorer: `sepolia.worldscan.org`.
 
 ---
 
@@ -62,6 +89,8 @@ Selfie Check is used as a risk and abuse-prevention signal at two high-stakes mo
 2. **Event RSVP gate** — before RSVPing to a limited-capacity event, Selfie Check confirms the same human who created the profile is claiming the spot
 
 Both use cases directly map to Selfie Check's three core capabilities: liveness detection, abuse resistance, and continuity verification.
+
+**On gender — explicitly not a World signal.** Selfie Check returns only a proof of a completed liveness/continuity check; it exposes no demographics, and no World credential verifies gender. The app shows an optional gender value that is a **third-party ML estimate** inferred from the selfie, entirely separate from World's stack. It is always labeled "estimated", never "verified", and is visually distinct from the Selfie Check human-verification badge. We do not and will not claim World-verified gender.
 
 **Features:**
 - Selfie Check enrollment inline on first match action (no Orb required — World ID App only)
@@ -89,12 +118,14 @@ Both use cases directly map to Selfie Check's three core capabilities: liveness 
 
 ```
 Proof of Attraction
-├── Mobile: React Native (Expo)
-├── Backend: Node.js + Hono (x402 + AgentKit server extensions)
-├── Auth: World ID via IDKit
-├── Agent registry: AgentBook on World Chain
-├── Chain: World Chain (AgentBook) + Base (payments fallback)
-└── Sandbox: World ID Sandbox App (TestFlight / Play Store)
+├── Mobile: React Native (Expo), standalone (not a Mini App)
+├── Backend: Hono on Vercel serverless (local dev via @hono/node-server)
+├── Auth: Selfie Check proof -> our JWT keyed to nullifier (expo-secure-store)
+├── State: Upstash Redis (durable per-human quota, nonces, nullifiers)
+├── Wallet: Privy embedded wallet + viem
+├── Agent registry: AgentBook on World Chain (eip155:480)
+├── Chain: World Chain Sepolia testnet (id 4801) for top-up settlement
+└── Sandbox: World ID Sandbox App
 ```
 
 ### Screens

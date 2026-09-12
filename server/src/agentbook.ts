@@ -1,41 +1,22 @@
 export const WORLD_CHAIN = 'eip155:480';
 export const BASE_CHAIN = 'eip155:8453';
+export const FREE_TRIAL_CALLS = 3;
 
-export type VerifyResult = {
-  verified: boolean;
+export type ResolveResult = {
+  registered: boolean;
   humanId?: string;
   reason?: string;
 };
 
-const registry = new Map<string, { humanId: string; usage: number; nonce: number }>();
-const trialUsage = new Map<string, number>();
+const registry = new Map<string, string>();
 
 export function seedRegistered(wallet: string, humanId: string) {
-  registry.set(wallet.toLowerCase(), { humanId, usage: 0, nonce: 0 });
+  registry.set(wallet.toLowerCase(), humanId);
 }
 
-export async function verifyAgent(wallet: string | undefined, chain: string | undefined): Promise<VerifyResult> {
-  if (!wallet) return { verified: false, reason: 'missing agent wallet' };
-
-  const entry = registry.get(wallet.toLowerCase());
-  if (!entry) {
-    return { verified: false, reason: 'not registered in AgentBook' };
-  }
-
-  entry.usage += 1;
-  entry.nonce += 1;
-
-  return { verified: true, humanId: entry.humanId };
+export async function resolveAgent(wallet: string | undefined): Promise<ResolveResult> {
+  if (!wallet) return { registered: false, reason: 'missing agent wallet' };
+  const humanId = registry.get(wallet.toLowerCase());
+  if (!humanId) return { registered: false, reason: 'not registered in AgentBook' };
+  return { registered: true, humanId };
 }
-
-export function recordTrialUse(wallet: string): number {
-  const next = (trialUsage.get(wallet.toLowerCase()) ?? 0) + 1;
-  trialUsage.set(wallet.toLowerCase(), next);
-  return next;
-}
-
-export function usageFor(wallet: string): number {
-  return trialUsage.get(wallet.toLowerCase()) ?? 0;
-}
-
-export const FREE_TRIAL_CALLS = 3;

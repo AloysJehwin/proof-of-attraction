@@ -6,10 +6,11 @@ import { Button, Divider } from '../src/components/Button';
 import { colors, spacing, font, radius } from '../src/theme';
 import { useApp } from '../src/lib/store';
 import { runSelfieCheck } from '../src/verification/selfieCheck';
+import { setToken } from '../src/auth/session';
 import { CURRENT_USER } from '../src/lib/data';
 
 export default function Onboarding() {
-  const { setTier, setSelfieCredential } = useApp();
+  const { setTier, setSelfieCredential, setGenderEstimate } = useApp();
   const [loading, setLoading] = useState<'selfie' | 'orb' | null>(null);
 
   async function verifySelfie() {
@@ -17,7 +18,9 @@ export default function Onboarding() {
     const result = await runSelfieCheck({ userId: CURRENT_USER.id, action: 'onboard' });
     setLoading(null);
     if (result.ok && result.credential) {
+      if (result.token) await setToken(result.token);
       setSelfieCredential(result.credential);
+      if (result.genderEstimate) setGenderEstimate(result.genderEstimate);
       setTier('selfie');
       router.replace('/(tabs)/discover');
     }

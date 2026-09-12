@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Switch, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Linking } from 'react-native';
 import { colors, spacing, font, radius } from '../../src/theme';
 import { useApp } from '../../src/lib/store';
 import { Button } from '../../src/components/Button';
 import { WORLD_CHAIN } from '../../src/agent/agentkit';
+import { useWallet } from '../../src/wallet/useWallet';
+import { FAUCET_URL, TOPUP_ETH } from '../../src/wallet/chain';
 
 const STYLES: Array<'warm' | 'witty' | 'direct'> = ['warm', 'witty', 'direct'];
 
 export default function AgentScreen() {
   const { agent, updateAgent, agentLog, revokeAgentAction } = useApp();
+  const wallet = useWallet();
   const [registering, setRegistering] = useState(false);
 
   function register() {
@@ -16,7 +19,7 @@ export default function AgentScreen() {
     setTimeout(() => {
       updateAgent({
         registered: true,
-        walletAddress: '0x' + Math.random().toString(16).slice(2, 10) + '...a9f2',
+        walletAddress: wallet.address ?? '0x' + Math.random().toString(16).slice(2, 10) + '...a9f2',
       });
       setRegistering(false);
     }, 1500);
@@ -45,6 +48,18 @@ export default function AgentScreen() {
 
       {agent.registered && (
         <>
+          {wallet.enabled && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Agent wallet</Text>
+              <Text style={styles.mono}>{wallet.address ?? 'provisioning...'}</Text>
+              <Text style={styles.desc}>
+                When the free trial runs out, the agent settles a {TOPUP_ETH} ETH top-up on World Chain Sepolia
+                to continue. Fund this wallet from the testnet faucet.
+              </Text>
+              <Button label="Open Sepolia faucet" onPress={() => Linking.openURL(FAUCET_URL)} variant="secondary" />
+            </View>
+          )}
+
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Icebreaker style</Text>
             <View style={styles.styleRow}>

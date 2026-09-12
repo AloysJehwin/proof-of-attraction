@@ -1,4 +1,5 @@
 import { SelfieCredential } from './tiers';
+import { estimateGender, GenderEstimate } from './genderEstimate';
 
 export type SelfieCheckParams = {
   userId: string;
@@ -9,13 +10,15 @@ export type SelfieCheckParams = {
 export type SelfieCheckResult = {
   ok: boolean;
   credential?: SelfieCredential;
+  token?: string;
+  genderEstimate?: GenderEstimate;
   error?: string;
 };
 
 const APP_ID = process.env.EXPO_PUBLIC_WORLD_APP_ID ?? 'app_staging_stub';
-const VERIFY_URL = process.env.EXPO_PUBLIC_VERIFY_URL ?? '';
+const AGENT_API = process.env.EXPO_PUBLIC_AGENT_API ?? '';
 
-export const SELFIE_CHECK_ENABLED = VERIFY_URL.length > 0;
+export const SELFIE_CHECK_ENABLED = AGENT_API.length > 0;
 
 export function buildSelfiePreset(params: SelfieCheckParams) {
   return {
@@ -31,7 +34,7 @@ export async function runSelfieCheck(params: SelfieCheckParams): Promise<SelfieC
     return simulateSelfieCheck(params);
   }
   try {
-    const res = await fetch(VERIFY_URL, {
+    const res = await fetch(`${AGENT_API}/auth/selfie`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(buildSelfiePreset(params)),
@@ -39,9 +42,11 @@ export async function runSelfieCheck(params: SelfieCheckParams): Promise<SelfieC
     if (!res.ok) {
       return { ok: false, error: `verify failed (${res.status})` };
     }
-    const data = (await res.json()) as { nullifier_hash: string };
+    const data = (await res.json()) as { nullifier_hash: string; token: string };
     return {
       ok: true,
+      token: data.token,
+      genderEstimate: await estimateGender(params.userId),
       credential: {
         verifiedAt: Date.now(),
         signalUserId: params.userId,
@@ -57,6 +62,8 @@ async function simulateSelfieCheck(params: SelfieCheckParams): Promise<SelfieChe
   await new Promise((r) => setTimeout(r, 1400));
   return {
     ok: true,
+    token: `sim_token_${params.userId}`,
+    genderEstimate: await estimateGender(params.userId),
     credential: {
       verifiedAt: Date.now(),
       signalUserId: params.userId,

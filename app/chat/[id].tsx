@@ -25,6 +25,7 @@ export default function Chat() {
   const [draft, setDraft] = useState('');
   const [gating, setGating] = useState(false);
   const [agentBusy, setAgentBusy] = useState(false);
+  const [topupNotice, setTopupNotice] = useState<string | null>(null);
 
   if (!match) {
     return (
@@ -66,7 +67,7 @@ export default function Chat() {
       kind: 'context',
       matchName: match!.profile.name,
       detail: ctx.payload ?? 'fetched context',
-      verified: ctx.verified,
+      verified: ctx.registered,
     });
     const ice = await agentCall('icebreaker', {
       matchId: match!.profile.id,
@@ -74,13 +75,18 @@ export default function Chat() {
       walletAddress: app.agent.walletAddress,
     });
     setAgentBusy(false);
+    if (ice.toppedUp?.ok) {
+      setTopupNotice(`Agent topped up on-chain. Tx ${ice.toppedUp.hash?.slice(0, 10)}...`);
+    } else if (ice.toppedUp && !ice.toppedUp.ok) {
+      setTopupNotice(`Top-up failed: ${ice.toppedUp.error}`);
+    }
     if (ice.ok && ice.payload) {
       setDraft(ice.payload);
       app.logAgentAction({
         kind: 'icebreaker',
         matchName: match!.profile.name,
         detail: ice.payload,
-        verified: ice.verified,
+        verified: ice.registered,
       });
     }
   }
@@ -96,6 +102,12 @@ export default function Chat() {
           <Text style={styles.disclosureText}>
             This user has authorized an agent. Messages marked Agent are sent by a World ID verified human via AgentBook.
           </Text>
+        </View>
+      )}
+
+      {topupNotice && (
+        <View style={styles.disclosure}>
+          <Text style={styles.disclosureText}>{topupNotice}</Text>
         </View>
       )}
 

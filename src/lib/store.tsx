@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
 import { CURRENT_USER, DISCOVERY_DECK, Profile } from './data';
 import { SelfieCredential, VerificationTier } from '../verification/tiers';
+import { GenderEstimate } from '../verification/genderEstimate';
 
 export type AgentConfig = {
   registered: boolean;
@@ -28,6 +29,7 @@ export type Match = {
 type AppState = {
   tier: VerificationTier;
   selfieCredential: SelfieCredential | null;
+  genderEstimate: GenderEstimate | null;
   verifiedOnly: boolean;
   matches: Match[];
   agent: AgentConfig;
@@ -35,6 +37,7 @@ type AppState = {
   rsvpEvents: string[];
   setTier: (t: VerificationTier) => void;
   setSelfieCredential: (c: SelfieCredential | null) => void;
+  setGenderEstimate: (g: GenderEstimate | null) => void;
   setVerifiedOnly: (v: boolean) => void;
   addMatch: (p: Profile) => void;
   unlockFirstMessage: (profileId: string) => void;
@@ -50,6 +53,7 @@ const Ctx = createContext<AppState | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [tier, setTier] = useState<VerificationTier>(CURRENT_USER.tier);
   const [selfieCredential, setSelfieCredential] = useState<SelfieCredential | null>(null);
+  const [genderEstimate, setGenderEstimate] = useState<GenderEstimate | null>(null);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
   const [rsvpEvents, setRsvpEvents] = useState<string[]>([]);
@@ -66,6 +70,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     () => ({
       tier,
       selfieCredential,
+      genderEstimate,
       verifiedOnly,
       matches,
       agent,
@@ -73,6 +78,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       rsvpEvents,
       setTier,
       setSelfieCredential,
+      setGenderEstimate,
       setVerifiedOnly,
       addMatch: (p) =>
         setMatches((prev) =>
@@ -101,7 +107,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           prev.includes(eventId) ? prev.filter((e) => e !== eventId) : [...prev, eventId]
         ),
     }),
-    [tier, selfieCredential, verifiedOnly, matches, agent, agentLog, rsvpEvents]
+    [tier, selfieCredential, genderEstimate, verifiedOnly, matches, agent, agentLog, rsvpEvents]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -6,15 +6,19 @@ import { TierBadge, AgentBadge } from '../../src/components/Badge';
 import { Button, Divider } from '../../src/components/Button';
 import { CURRENT_USER } from '../../src/lib/data';
 import { daysUntilExpiry, isSelfieValid } from '../../src/verification/tiers';
+import { GENDER_ESTIMATE_DISCLAIMER } from '../../src/verification/genderEstimate';
+import { clearToken } from '../../src/auth/session';
 
 export default function Profile() {
-  const { tier, selfieCredential, agent, matches, setTier, setSelfieCredential } = useApp();
+  const { tier, selfieCredential, genderEstimate, agent, matches, setTier, setSelfieCredential, setGenderEstimate } = useApp();
   const days = daysUntilExpiry(selfieCredential);
   const valid = isSelfieValid(selfieCredential);
 
-  function signOut() {
+  async function signOut() {
+    await clearToken();
     setTier('unverified');
     setSelfieCredential(null);
+    setGenderEstimate(null);
     router.replace('/');
   }
 
@@ -53,6 +57,14 @@ export default function Profile() {
         )}
       </View>
 
+      {genderEstimate && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Gender (estimated)</Text>
+          <Text style={styles.estimate}>{genderEstimate.label}</Text>
+          <Text style={styles.disclaimer}>{GENDER_ESTIMATE_DISCLAIMER}</Text>
+        </View>
+      )}
+
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Bio</Text>
         <Text style={styles.line}>{CURRENT_USER.bio}</Text>
@@ -85,6 +97,8 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, gap: spacing.sm },
   cardTitle: { color: colors.text, fontSize: font.size.md, fontWeight: font.weight.bold },
   line: { color: colors.textMuted, fontSize: font.size.sm, lineHeight: 20 },
+  estimate: { color: colors.text, fontSize: font.size.md, textTransform: 'capitalize' },
+  disclaimer: { color: colors.textFaint, fontSize: font.size.xs, lineHeight: 18 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chip: { backgroundColor: colors.surfaceAlt, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 4 },
   chipText: { color: colors.textMuted, fontSize: font.size.xs },
