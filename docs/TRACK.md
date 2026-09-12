@@ -19,7 +19,7 @@ The app targets both World prizes simultaneously:
 
 ## Prize Targets
 
-### 🤖 AgentKit Continuity — $3,500
+### AgentKit Continuity — $3,500
 
 **How we use AgentKit:**
 
@@ -53,7 +53,7 @@ So the user *sees* an in-chat agent; the *plumbing* is real x402 + AgentBook ver
 
 ---
 
-### 🤳 Selfie Check — $3,500
+### Selfie Check — $3,500
 
 **How we use Selfie Check:**
 
