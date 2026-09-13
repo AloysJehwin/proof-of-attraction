@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <defs>
+    <!-- Brand gradient: accent rose -> agent periwinkle -->
+    <linearGradient id="ring" x1="200" y1="200" x2="824" y2="824" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF4D6D"/>
+      <stop offset="1" stop-color="#6C8CFF"/>
+    </linearGradient>
+    <linearGradient id="word" x1="96" y1="300" x2="700" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF4D6D"/>
+      <stop offset="1" stop-color="#6C8CFF"/>
+    </linearGradient>
+    <radialGradient id="spark" cx="512" cy="512" r="230" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.35" stop-color="#FF9DB0"/>
+      <stop offset="1" stop-color="#FF4D6D"/>
+    </radialGradient>
+    <radialGradient id="glowRose" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FF4D6D" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#FF4D6D" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowBlue" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#6C8CFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#6C8CFF" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0 L0 0 0 40" fill="none" stroke="#2A2A2E" stroke-width="1" stroke-opacity="0.45"/>
+    </pattern>
+  </defs>
+
+  <!-- Canvas -->
+  <rect width="1280" height="640" fill="#0A0A0B"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <ellipse cx="1000" cy="300" rx="460" ry="420" fill="url(#glowRose)"/>
+  <ellipse cx="180" cy="560" rx="420" ry="360" fill="url(#glowBlue)"/>
+
+  <!-- Logo mark: broken rings + four-point spark -->
+  <g transform="translate(795.2 115.2) scale(0.4)">
+    <circle cx="512" cy="512" r="300" fill="#FF4D6D" fill-opacity="0.12"/>
+    <circle cx="512" cy="512" r="360" fill="none" stroke="url(#ring)" stroke-width="34"
+            stroke-linecap="round" stroke-dasharray="1035 66" transform="rotate(-90 512 512)"/>
+    <circle cx="512" cy="512" r="292" fill="none" stroke="url(#ring)" stroke-width="18"
+            stroke-linecap="round" stroke-dasharray="360 130" stroke-opacity="0.55"
+            transform="rotate(60 512 512)"/>
+    <path d="M512 300 C540 452 572 484 724 512 C572 540 540 572 512 724 C484 572 452 540 300 512 C452 484 484 452 512 300 Z"
+          fill="url(#spark)"/>
+  </g>
+
+  <!-- Copy -->
+  <g font-family="Inter, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif">
+    <!-- Eyebrow -->
+    <g transform="translate(96 168)">
+      <circle cx="6" cy="-5" r="5" fill="#39D98A"/>
+      <text x="22" y="0" fill="#9A9AA0" font-size="17" font-weight="600" letter-spacing="3.4">
+        ORB-VERIFIED HUMANS ONLY
+      </text>
+    </g>
+
+    <!-- Title -->
+    <text x="96" y="288" fill="#F5F5F7" font-size="86" font-weight="700" letter-spacing="-1.5">Proof of</text>
+    <text x="96" y="380" fill="url(#word)" font-size="86" font-weight="700" letter-spacing="-1.5">Attraction</text>
+
+    <!-- Subtitle -->
+    <text x="96" y="438" fill="#9A9AA0" font-size="25" font-weight="500">
+      Dating where every match is a verified human.
+    </text>
+
+    <!-- Feature chips -->
+    <g transform="translate(96 486)">
+      <g>
+        <rect x="0" y="0" width="196" height="46" rx="23" fill="#1C1C1F" stroke="#2A2A2E"/>
+        <circle cx="26" cy="23" r="5" fill="#FF4D6D"/>
+        <text x="42" y="29" fill="#F5F5F7" font-size="16" font-weight="600">World ID Orb</text>
+      </g>
+      <g transform="translate(212 0)">
+        <rect x="0" y="0" width="178" height="46" rx="23" fill="#1C1C1F" stroke="#2A2A2E"/>
+        <circle cx="26" cy="23" r="5" fill="#6C8CFF"/>
+        <text x="42" y="29" fill="#F5F5F7" font-size="16" font-weight="600">AgentKit</text>
+      </g>
+      <g transform="translate(406 0)">
+        <rect x="0" y="0" width="206" height="46" rx="23" fill="#1C1C1F" stroke="#2A2A2E"/>
+        <circle cx="26" cy="23" r="5" fill="#39D98A"/>
+        <text x="42" y="29" fill="#F5F5F7" font-size="16" font-weight="600">World Chain</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Bottom accent rule -->
+  <rect x="0" y="636" width="1280" height="4" fill="url(#ring)"/>
+</svg>
+
