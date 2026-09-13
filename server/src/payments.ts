@@ -9,7 +9,8 @@ export const worldChainSepolia = defineChain({
   testnet: true,
 });
 
-const client = createPublicClient({ chain: worldChainSepolia, transport: http() });
+export const publicClient = createPublicClient({ chain: worldChainSepolia, transport: http() });
+const client = publicClient;
 
 export const TOPUP_ADDRESS = (process.env.TOPUP_ADDRESS ?? '0x0000000000000000000000000000000000000000').toLowerCase();
 export const TOPUP_MIN_WEI = parseEther(process.env.TOPUP_MIN_ETH ?? '0.0001');
@@ -19,8 +20,10 @@ export type ReceiptCheck = { valid: boolean; reason?: string };
 
 export async function verifyTopUp(txHash: string): Promise<ReceiptCheck> {
   if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) return { valid: false, reason: 'malformed tx hash' };
-  const receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` }).catch(() => null);
-  if (!receipt) return { valid: false, reason: 'receipt not found' };
+  const receipt = await client
+    .waitForTransactionReceipt({ hash: txHash as `0x${string}`, timeout: 45_000, pollingInterval: 1_500 })
+    .catch(() => null);
+  if (!receipt) return { valid: false, reason: 'transaction not confirmed yet, retry in a few seconds' };
   if (receipt.status !== 'success') return { valid: false, reason: 'tx reverted' };
   const tx = await client.getTransaction({ hash: txHash as `0x${string}` }).catch(() => null);
   if (!tx) return { valid: false, reason: 'tx not found' };

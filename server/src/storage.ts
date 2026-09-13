@@ -4,6 +4,7 @@ export interface AgentKitStorage {
   tryIncrementUsage(humanId: string, limit: number): Promise<{ used: number; allowed: boolean }>;
   creditUsage(humanId: string, calls: number): Promise<void>;
   usageFor(humanId: string): Promise<number>;
+  creditFor(humanId: string): Promise<number>;
   hasUsedNonce(nonce: string): Promise<boolean>;
   recordNonce(nonce: string): Promise<void>;
   registerWallet(wallet: string, humanId: string): Promise<void>;
@@ -30,6 +31,9 @@ class MemoryStorage implements AgentKitStorage {
   }
   async usageFor(humanId: string) {
     return this.usage.get(humanId) ?? 0;
+  }
+  async creditFor(humanId: string) {
+    return this.credit.get(humanId) ?? 0;
   }
   async hasUsedNonce(nonce: string) {
     return this.nonces.has(nonce);
@@ -74,6 +78,9 @@ class RedisStorage implements AgentKitStorage {
   }
   async usageFor(humanId: string) {
     return Number((await this.redis.get(this.usageKey(humanId))) ?? 0);
+  }
+  async creditFor(humanId: string) {
+    return Number((await this.redis.get(this.creditKey(humanId))) ?? 0);
   }
   async hasUsedNonce(nonce: string) {
     return (await this.redis.exists(this.nonceKey(nonce))) === 1;

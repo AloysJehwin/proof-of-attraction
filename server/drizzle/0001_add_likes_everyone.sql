@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "likes_everyone" boolean DEFAULT false NOT NULL;

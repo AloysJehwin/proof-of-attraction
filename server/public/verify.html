@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Verify with World ID</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0f0d15; color: #f3eefb; font-family: -apple-system, system-ui, sans-serif; }
+      #root { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 20px; padding: 24px; box-sizing: border-box; text-align: center; }
+      h1 { font-size: 20px; margin: 0; }
+      p { color: #b8aecc; margin: 0; line-height: 1.5; max-width: 340px; }
+      button { background: #7c5cff; color: #fff; border: none; border-radius: 14px; padding: 16px 28px; font-size: 16px; font-weight: 600; cursor: pointer; }
+      button:disabled { opacity: 0.5; }
+      .ghost { background: transparent; color: #b8aecc; }
+      #status { min-height: 20px; font-size: 14px; color: #b8aecc; }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <h1>Verify you are a real, unique human</h1>
+      <p id="desc">Preparing verification...</p>
+      <button id="primary" disabled>Please wait</button>
+      <button id="cancel" class="ghost">Cancel</button>
+      <div id="status"></div>
+    </div>
+    <script type="module">
+      import { IDKit, proofOfHuman } from 'https://esm.sh/@worldcoin/idkit-core@4.2.4';
+
+      const params = new URLSearchParams(location.search);
+      const app_id = params.get('app_id');
+      const action = params.get('action') || 'onboard';
+      const signal = params.get('signal') || '';
+      const api = params.get('api') || '';
+      const environment = params.get('environment') || 'sandbox';
+      const mode = params.get('mode') || 'uniqueness';
+      const session_id = params.get('session_id') || '';
+
+      const post = (msg) => window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+      const desc = document.getElementById('desc');
+      const primary = document.getElementById('primary');
+      const statusEl = document.getElementById('status');
+      document.getElementById('cancel').onclick = () => post({ type: 'cancel' });
+
+      if (!app_id || !api || (mode === 'uniqueness' && !action) || (mode === 'prove-session' && !session_id)) {
+        desc.textContent = 'Missing app_id, action, or api.';
+      } else {
+        run().catch((e) => {
+          statusEl.textContent = String(e && (e.message || e));
+          post({ type: 'error', error: String(e && (e.message || e)) || 'verification failed' });
+        });
+      }
+
+      async function run() {
+        statusEl.textContent = 'Preparing request...';
+        const ctxRes = await fetch(api + '/auth/worldid/context', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mode === 'uniqueness' ? { action } : { session: true }),
+        });
+        const ctx = await ctxRes.json().catch(() => ({}));
+        if (!ctx.ok || !ctx.rp_context) throw new Error(ctx.error || 'context failed');
+
+        let req;
+        if (mode === 'create-session') {
+          req = await IDKit.createSession({ app_id, rp_context: ctx.rp_context, environment, action_description: 'Stay signed in to Proof of Attraction' })
+            .constraints(IDKit.any(IDKit.CredentialRequest('proof_of_human')));
+        } else if (mode === 'prove-session') {
+          req = await IDKit.proveSession(session_id, { app_id, rp_context: ctx.rp_context, environment, action_description: 'Log in to Proof of Attraction' })
+            .constraints(IDKit.any(IDKit.CredentialRequest('proof_of_human')));
+        } else {
+          req = await IDKit.request({
+            app_id,
+            action,
+            rp_context: ctx.rp_context,
+            allow_legacy_proofs: true,
+            environment,
+          }).preset(proofOfHuman({ signal }));
+        }
+
+        const openUrl = req.connectorURI;
+        desc.textContent = 'Open the World App to approve, then return here.';
+        primary.disabled = false;
+        primary.textContent = 'Open World App';
+        primary.onclick = () => { window.location.href = openUrl; };
+        window.location.href = openUrl;
+
+        statusEl.textContent = 'Waiting for approval in the World App...';
+        const outcome = await req.pollUntilCompletion();
+        if (outcome.success) {
+          statusEl.textContent = 'Confirmed. Returning to app...';
+          post({ type: 'result', result: outcome.result });
+        } else {
+          const err = outcome.error && (outcome.error.message || String(outcome.error));
+          statusEl.textContent = 'Failed: ' + (err || 'unknown');
+          post({ type: 'error', error: err || 'verification failed' });
+        }
+      }
+    </script>
+  </body>
+</html>
