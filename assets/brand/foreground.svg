@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="ring" x1="300" y1="300" x2="724" y2="724" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF4D6D"/>
+      <stop offset="1" stop-color="#6C8CFF"/>
+    </linearGradient>
+    <radialGradient id="spark" cx="512" cy="512" r="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.35" stop-color="#FF9DB0"/>
+      <stop offset="1" stop-color="#FF4D6D"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(512 512) scale(0.62) translate(-512 -512)">
+    <circle cx="512" cy="512" r="360" fill="none" stroke="url(#ring)" stroke-width="40" stroke-linecap="round" stroke-dasharray="1035 66" transform="rotate(-90 512 512)"/>
+    <circle cx="512" cy="512" r="292" fill="none" stroke="url(#ring)" stroke-width="22" stroke-linecap="round" stroke-dasharray="360 130" stroke-opacity="0.55" transform="rotate(60 512 512)"/>
+    <path d="M512 300 C540 452 572 484 724 512 C572 540 540 572 512 724 C484 572 452 540 300 512 C452 484 484 452 512 300 Z" fill="url(#spark)"/>
+  </g>
+</svg>

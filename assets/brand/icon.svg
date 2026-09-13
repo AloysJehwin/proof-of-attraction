@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="ring" x1="200" y1="200" x2="824" y2="824" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF4D6D"/>
+      <stop offset="1" stop-color="#6C8CFF"/>
+    </linearGradient>
+    <radialGradient id="spark" cx="512" cy="512" r="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.35" stop-color="#FF9DB0"/>
+      <stop offset="1" stop-color="#FF4D6D"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="512" cy="512" r="270" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF4D6D" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#FF4D6D" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="square"><rect width="1024" height="1024" rx="224"/></clipPath>
+  </defs>
+  <g clip-path="url(#square)">
+    <rect width="1024" height="1024" fill="#0A0A0B"/>
+    <circle cx="512" cy="512" r="270" fill="url(#glow)"/>
+    <circle cx="512" cy="512" r="300" fill="none" stroke="url(#ring)" stroke-width="30" stroke-linecap="round" stroke-dasharray="860 55" transform="rotate(-90 512 512)"/>
+    <circle cx="512" cy="512" r="244" fill="none" stroke="url(#ring)" stroke-width="15" stroke-linecap="round" stroke-dasharray="300 108" stroke-opacity="0.55" transform="rotate(60 512 512)"/>
+    <path d="M512 336 C535 462 561 488 688 512 C561 536 535 562 512 688 C488 562 462 536 336 512 C462 488 488 462 512 336 Z" fill="url(#spark)"/>
+  </g>
+</svg>
