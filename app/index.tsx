@@ -74,7 +74,9 @@ function OnboardingForm({ step, setStep }: { step: Step; setStep: (s: Step) => v
     if (!result.ok || !result.credential) {
       setLoading(false);
       if (result.code === 'already_registered') {
-        setError('This World ID already has an account. Logging you in instead...');
+        // World ID 4.0 action nullifiers are one-time-use, so this World ID can never
+        // "sign up" for this action again. The only way back in is a session proof.
+        setError('This World ID already signed up. Logging you in instead...');
         await login();
         return;
       }
@@ -146,7 +148,11 @@ function OnboardingForm({ step, setStep }: { step: Step; setStep: (s: Step) => v
     const found = await lookupWorldSession(h);
     if (!found.ok || !found.sessionId) {
       setLoggingIn(false);
-      setError(found.error ?? 'no account found');
+      setError(
+        /no account/i.test(found.error ?? '')
+          ? 'No account found for that handle. If the account was deleted, this World ID cannot sign up again on the same action (World ID 4.0 nullifiers are one-time-use). Ask the developer to rotate EXPO_PUBLIC_WORLD_ID_ACTION.'
+          : found.error ?? 'no account found',
+      );
       return;
     }
     await loginWithSession(found.sessionId);
@@ -288,6 +294,7 @@ function OnboardingForm({ step, setStep }: { step: Step; setStep: (s: Step) => v
         <ScrollView contentContainerStyle={{ gap: spacing.md, paddingBottom: spacing.lg }}>
           <Text style={styles.title}>Log in with World ID</Text>
           <Text style={styles.subtitle}>Enter your handle, then approve the login in the World App. No new verification is needed.</Text>
+          <Text style={styles.hint}>Already verified this World ID? Sign-up can only happen once per action, so logging in is the only way back into your account.</Text>
           <TextInput
             style={styles.input}
             placeholder="your handle"
