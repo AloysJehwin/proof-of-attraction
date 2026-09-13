@@ -6,11 +6,13 @@ import { AppProvider } from '../src/lib/store';
 import { AuthProvider } from '../src/auth/AuthContext';
 import { WorldIdProvider } from '../src/verification/WorldIdProvider';
 import { WalletProvider, WALLET_ENABLED } from '../src/wallet/provider';
-import { useWallet } from '../src/wallet/useWallet';
+import { useWalletSync } from '../src/wallet/useWalletSync';
 import { colors } from '../src/theme';
 
+// Provisions the embedded wallet and links it to the account as soon as it is
+// ready, so the backend can use it for reputation scoring and agent quota.
 function WalletBridge() {
-  useWallet();
+  useWalletSync();
   return null;
 }
 

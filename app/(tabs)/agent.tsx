@@ -6,6 +6,7 @@ import { useApp } from '../../src/lib/store';
 import { Button } from '../../src/components/Button';
 import { WORLD_CHAIN, agentDiagnostics } from '../../src/agent/agentkit';
 import { saveWallet } from '../../src/api';
+import { useAuth } from '../../src/auth/AuthContext';
 import { useWallet } from '../../src/wallet/useWallet';
 import { TOPUP_ETH } from '../../src/wallet/chain';
 import { topUpAgent, creditTopUpFromTx, TopUpResult } from '../../src/wallet/topup';
@@ -19,6 +20,7 @@ export default function AgentScreen() {
   const { agent, updateAgent, agentLog, agentUsage, refreshAgentLog, revokeAgentAction } = useApp();
   useFocusEffect(useCallback(() => { refreshAgentLog(); }, [refreshAgentLog]));
   const wallet = useWallet();
+  const { refresh: refreshAuth } = useAuth();
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [toppingUp, setToppingUp] = useState(false);
@@ -45,6 +47,7 @@ export default function AgentScreen() {
     try {
       await saveWallet(wallet.address);
       updateAgent({ registered: true, walletAddress: wallet.address });
+      await refreshAuth();
     } catch (e) {
       setRegisterError(e instanceof Error ? e.message : 'could not register agent');
     } finally {
