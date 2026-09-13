@@ -41,9 +41,15 @@ app.post('/auth/selfie', async (c) => {
     }
     const outcome = await verifyProof(body.worldid_result);
     if (!outcome.ok) {
+      // World ID 4.0: an action nullifier is unique per (user, rp, action) and is
+      // one-time-use for uniqueness proofs. Re-verifying the same action always
+      // returns `nullifier_replayed` / `max_verifications_reached`.
+      // Docs: https://docs.world.org/world-id/idkit/error-codes
+      // Guidance: treat as an already-verified outcome and send the user to sign-in
+      // (session proofs), never as a retryable signup.
       const replayed = outcome.code === 'max_verifications_reached' || outcome.code === 'nullifier_replayed' || /replay/i.test(outcome.error);
       const error = replayed
-        ? 'This World ID already signed up. Use "Log in with World ID" instead.'
+        ? 'This World ID already completed sign-up for this app. Use "Log in with World ID" instead.'
         : outcome.error;
       return c.json({ ok: false, error, code: replayed ? 'already_registered' : outcome.code }, replayed ? 409 : 400);
     }

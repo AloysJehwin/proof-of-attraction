@@ -4,21 +4,32 @@
 //   - Neon Postgres: users row (cascades to profiles/likes/matches/messages/rsvps/push_tokens/agent_actions)
 //   - Upstash Redis: nullifier:*, usage:*, credit:*, wallet:* keys
 //
-// NOTE: This does NOT reset World ID's own "already verified" memory for an action.
-// If you use real World ID and still get `nullifier_replayed` after resetting here,
-// bump EXPO_PUBLIC_WORLD_ID_ACTION (e.g. onboard5 -> onboard6) OR set the action's
-// "Max verifications per person" to Unlimited in the World Developer Portal.
+// IMPORTANT — why you also need --bump-action:
+// In World ID 4.0 a nullifier is unique per (user, rp/app, action) and is ONE-TIME-USE
+// for uniqueness proofs. Once a World ID has verified an action, re-verifying that SAME
+// action always returns `nullifier_replayed`. World does not expose a reset, and 4.0
+// removed "unlimited verifications" for actions.
+//   Docs: https://docs.world.org/world-id/idkit/error-codes
+//         "nullifier_replayed — Nullifier was already used for this action.
+//          Treat as an already-verified outcome; do not retry the same action."
+//   Docs: https://docs.world.org/world-id/4-0-migration
+//         Use `nullifier` for one-time uniqueness, `session_id` for continuity.
+//
+// So wiping our DB orphans that World ID: World says "already verified", but we no
+// longer have the account to log into. Bumping the action mints a fresh nullifier.
 //
 // Usage (run from the server/ folder):
-//   node scripts/reset-user.mjs --all
+//   node scripts/reset-user.mjs --all --bump-action
 //   node scripts/reset-user.mjs --handle myhandle
 //   node scripts/reset-user.mjs --nullifier 0xabc...
+//   node scripts/reset-user.mjs --bump-action          (only rotate the action)
 //
 // Env is loaded from the repo root .env automatically.
 
 import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { config as loadEnv } from 'dotenv';
 import { neon } from '@neondatabase/serverless';
 import { Redis } from '@upstash/redis';
@@ -28,14 +39,46 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: resolve(__dirname, '../../.env') });
 
 function parseArgs(argv) {
-  const args = { all: false, handle: null, nullifier: null };
+  const args = { all: false, handle: null, nullifier: null, bumpAction: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--all') args.all = true;
+    else if (a === '--bump-action') args.bumpAction = true;
     else if (a === '--handle') args.handle = argv[++i]?.toLowerCase() ?? null;
     else if (a === '--nullifier') args.nullifier = argv[++i] ?? null;
   }
   return args;
+}
+
+const ENV_PATH = resolve(__dirname, '../../.env');
+const ACTION_KEY = 'EXPO_PUBLIC_WORLD_ID_ACTION';
+
+// Rotate EXPO_PUBLIC_WORLD_ID_ACTION (e.g. onboard5 -> onboard6) so World mints a
+// fresh nullifier instead of returning `nullifier_replayed`.
+function bumpAction() {
+  let raw;
+  try {
+    raw = readFileSync(ENV_PATH, 'utf8');
+  } catch {
+    console.log(`  • Could not read ${ENV_PATH} — skipped action bump.`);
+    return null;
+  }
+
+  const lines = raw.split('\n');
+  const idx = lines.findIndex((l) => l.trimStart().startsWith(`${ACTION_KEY}=`));
+  const current = idx >= 0 ? lines[idx].split('=').slice(1).join('=').trim() : 'onboard0';
+
+  // Split trailing digits: "onboard5" -> base "onboard", n 5
+  const m = /^(.*?)(\d+)$/.exec(current);
+  const next = m ? `${m[1]}${Number(m[2]) + 1}` : `${current || 'onboard'}1`;
+  const line = `${ACTION_KEY}=${next}`;
+
+  if (idx >= 0) lines[idx] = line;
+  else lines.push(line);
+
+  writeFileSync(ENV_PATH, lines.join('\n'));
+  console.log(`  ✓ Action rotated: ${current} -> ${next}`);
+  return next;
 }
 
 function humanIdFromNullifier(nullifierHash) {
@@ -56,14 +99,23 @@ async function redisDeleteByPatterns(redis, patterns) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 
-  if (!dbUrl) {
-    console.error('✖ DATABASE_URL not set in .env — nothing to clear in Postgres.');
+  if (!args.all && !args.handle && !args.nullifier && !args.bumpAction) {
+    console.error('Usage: node scripts/reset-user.mjs (--all | --handle <h> | --nullifier <hash>) [--bump-action]');
     process.exit(1);
   }
-  if (!args.all && !args.handle && !args.nullifier) {
-    console.error('Usage: node scripts/reset-user.mjs (--all | --handle <h> | --nullifier <hash>)');
+
+  // Action-only rotation (no DB work requested).
+  if (args.bumpAction && !args.all && !args.handle && !args.nullifier) {
+    console.log('Rotating World ID action only:');
+    const next = bumpAction();
+    if (next) console.log(`\nDone. Restart Expo so the new action is inlined:\n  npx expo start -c`);
+    return;
+  }
+
+  const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+  if (!dbUrl) {
+    console.error('✖ DATABASE_URL not set in .env — nothing to clear in Postgres.');
     process.exit(1);
   }
 
@@ -84,7 +136,9 @@ async function main() {
     } else {
       console.log('  • Redis not configured — skipped.');
     }
-    console.log('\nDone. You can sign up fresh (bump the World action if you still hit replay).');
+
+    if (args.bumpAction) bumpAction();
+    printNextSteps(args.bumpAction);
     return;
   }
 
@@ -95,6 +149,7 @@ async function main() {
 
   if (!rows.length) {
     console.log(`No user found for ${args.handle ? `handle "${args.handle}"` : `nullifier "${args.nullifier}"`}.`);
+    if (args.bumpAction) bumpAction();
     return;
   }
 
@@ -109,7 +164,20 @@ async function main() {
       console.log(`  ✓ Redis: cleared ${keys.length} key(s) for ${humanId}.`);
     }
   }
+
+  if (args.bumpAction) bumpAction();
+  printNextSteps(args.bumpAction);
+}
+
+function printNextSteps(bumped) {
   console.log('\nDone.');
+  if (bumped) {
+    console.log('Restart Expo so the new action is inlined into the bundle:');
+    console.log('  npx expo start -c');
+  } else {
+    console.log('NOTE: World still remembers the old action for your World ID.');
+    console.log('If you hit `nullifier_replayed`, re-run with --bump-action.');
+  }
 }
 
 main().catch((err) => {
