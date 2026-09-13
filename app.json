@@ -29,7 +29,34 @@
       "expo-router",
       "expo-secure-store",
       "expo-apple-authentication",
-      "@privy-io/expo"
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Proof of Attraction uses your photos to set your profile picture.",
+          "cameraPermission": "Proof of Attraction uses your camera to take a profile picture."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Proof of Attraction uses your location to show you nearby matches."
+        }
+      ],
+      "expo-notifications",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "backgroundColor": "#0A0A0B",
+          "imageWidth": 200
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Proof of Attraction uses your front camera for a live selfie check."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

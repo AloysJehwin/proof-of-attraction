@@ -1,14 +1,16 @@
+import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, type ColorValue } from 'react-native';
 import { colors, font } from '../../src/theme';
+import { useApp } from '../../src/lib/store';
 
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  return (
-    <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.4 }}>{label}</Text>
-  );
+function TabIcon({ label, color }: { label: string; color: ColorValue }) {
+  return <Text style={{ fontSize: 22, color }}>{label}</Text>;
 }
 
 export default function TabsLayout() {
+  const { refreshProfile, refreshMatches, refreshAgentLog } = useApp();
+  useEffect(() => { refreshProfile(); refreshMatches(); refreshAgentLog(); }, [refreshProfile, refreshMatches, refreshAgentLog]);
   return (
     <Tabs
       screenOptions={{
@@ -22,29 +24,29 @@ export default function TabsLayout() {
           paddingTop: 8,
         },
         tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textFaint,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarLabelStyle: { fontSize: 11, fontWeight: font.weight.medium },
       }}
     >
       <Tabs.Screen
         name="discover"
-        options={{ title: 'Discover', tabBarIcon: ({ focused }) => <TabIcon label="◈" focused={focused} /> }}
+        options={{ title: 'Discover', tabBarIcon: ({ color }) => <TabIcon label="◈" color={color} /> }}
       />
       <Tabs.Screen
         name="matches"
-        options={{ title: 'Matches', tabBarIcon: ({ focused }) => <TabIcon label="♡" focused={focused} /> }}
+        options={{ title: 'Matches', tabBarIcon: ({ color }) => <TabIcon label="♡" color={color} /> }}
       />
       <Tabs.Screen
         name="events"
-        options={{ title: 'Events', tabBarIcon: ({ focused }) => <TabIcon label="◉" focused={focused} /> }}
+        options={{ title: 'Events', tabBarIcon: ({ color }) => <TabIcon label="◉" color={color} /> }}
       />
       <Tabs.Screen
         name="agent"
-        options={{ title: 'Agent', tabBarIcon: ({ focused }) => <TabIcon label="⚙" focused={focused} /> }}
+        options={{ title: 'Agent', tabBarIcon: ({ color }) => <TabIcon label="⚙" color={color} /> }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profile', tabBarIcon: ({ focused }) => <TabIcon label="○" focused={focused} /> }}
+        options={{ title: 'Profile', tabBarIcon: ({ color }) => <TabIcon label="○" color={color} /> }}
       />
     </Tabs>
   );

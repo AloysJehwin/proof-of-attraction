@@ -20,6 +20,15 @@ export const tierColors = {
   orb: colors.accent,
 } as const;
 
+export const brand = {
+  gradientFrom: colors.accent,
+  gradientTo: colors.agent,
+  sparkCore: '#FFFFFF',
+  sparkMid: '#FF9DB0',
+  sparkEdge: colors.accent,
+  ink: colors.bg,
+} as const;
+
 export const spacing = {
   xs: 4,
   sm: 8,

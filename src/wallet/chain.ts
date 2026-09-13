@@ -13,7 +13,7 @@ export const worldChainSepolia = defineChain({
   testnet: true,
 });
 
-export const FAUCET_URL = 'https://www.alchemy.com/faucets/world-chain-sepolia';
+export const FAUCET_URL = 'https://ethglobal.com/faucet/world-chain-sepolia-4801';
 export const TOPUP_ADDRESS = process.env.EXPO_PUBLIC_TOPUP_ADDRESS ?? '0x0000000000000000000000000000000000000000';
 export const TOPUP_ETH = process.env.EXPO_PUBLIC_TOPUP_ETH ?? '0.0001';
 

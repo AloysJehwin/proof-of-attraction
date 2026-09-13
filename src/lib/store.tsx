@@ -1,113 +1,132 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
-import { CURRENT_USER, DISCOVERY_DECK, Profile } from './data';
+import React, { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
+import * as SecureStore from 'expo-secure-store';
 import { SelfieCredential, VerificationTier } from '../verification/tiers';
 import { GenderEstimate } from '../verification/genderEstimate';
+import {
+  ApiMatch, ApiEvent, ApiProfile, ApiAgentAction, ApiAgentUsage,
+  getMatches, getEvents, getMe, getAgentActions, revokeAgentAction as apiRevokeAgentAction,
+} from '../api';
+
+export type IcebreakerStyle = 'warm' | 'witty' | 'direct';
 
 export type AgentConfig = {
   registered: boolean;
   walletAddress: string | null;
-  icebreakerStyle: 'warm' | 'witty' | 'direct';
+  icebreakerStyle: IcebreakerStyle;
   dealbreakers: string[];
   autoSuggest: boolean;
 };
 
-export type AgentAction = {
-  id: string;
-  kind: 'context' | 'icebreaker' | 'send';
-  matchName: string;
-  detail: string;
-  verified: boolean;
-  at: number;
-};
+const PREFS_KEY = 'poa_agent_prefs';
 
-export type Match = {
-  profile: Profile;
-  firstMessageUnlocked: boolean;
-  messages: { from: 'me' | 'them'; text: string; viaAgent?: boolean; at: number }[];
-};
+type AgentPrefs = Pick<AgentConfig, 'icebreakerStyle' | 'dealbreakers' | 'autoSuggest'>;
+
+const DEFAULT_PREFS: AgentPrefs = { icebreakerStyle: 'warm', dealbreakers: [], autoSuggest: true };
+
+async function loadPrefs(): Promise<AgentPrefs> {
+  try {
+    const raw = await SecureStore.getItemAsync(PREFS_KEY);
+    return raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : DEFAULT_PREFS;
+  } catch {
+    return DEFAULT_PREFS;
+  }
+}
+
+function savePrefs(prefs: AgentPrefs): void {
+  SecureStore.setItemAsync(PREFS_KEY, JSON.stringify(prefs)).catch(() => undefined);
+}
 
 type AppState = {
   tier: VerificationTier;
   selfieCredential: SelfieCredential | null;
   genderEstimate: GenderEstimate | null;
   verifiedOnly: boolean;
-  matches: Match[];
+  profile: ApiProfile | null;
+  matches: ApiMatch[];
+  events: ApiEvent[];
   agent: AgentConfig;
-  agentLog: AgentAction[];
-  rsvpEvents: string[];
+  agentLog: ApiAgentAction[];
+  agentUsage: ApiAgentUsage | null;
   setTier: (t: VerificationTier) => void;
   setSelfieCredential: (c: SelfieCredential | null) => void;
   setGenderEstimate: (g: GenderEstimate | null) => void;
   setVerifiedOnly: (v: boolean) => void;
-  addMatch: (p: Profile) => void;
-  unlockFirstMessage: (profileId: string) => void;
-  sendMessage: (profileId: string, text: string, viaAgent?: boolean) => void;
+  setProfile: (p: ApiProfile | null) => void;
+  refreshProfile: () => Promise<void>;
+  refreshMatches: () => Promise<void>;
+  refreshEvents: () => Promise<void>;
+  refreshAgentLog: () => Promise<void>;
   updateAgent: (patch: Partial<AgentConfig>) => void;
-  logAgentAction: (a: Omit<AgentAction, 'id' | 'at'>) => void;
-  revokeAgentAction: (id: string) => void;
-  toggleRsvp: (eventId: string) => void;
+  revokeAgentAction: (id: string) => Promise<void>;
 };
 
 const Ctx = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [tier, setTier] = useState<VerificationTier>(CURRENT_USER.tier);
+  const [tier, setTier] = useState<VerificationTier>('unverified');
   const [selfieCredential, setSelfieCredential] = useState<SelfieCredential | null>(null);
   const [genderEstimate, setGenderEstimate] = useState<GenderEstimate | null>(null);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [rsvpEvents, setRsvpEvents] = useState<string[]>([]);
-  const [agent, setAgent] = useState<AgentConfig>({
-    registered: false,
-    walletAddress: null,
-    icebreakerStyle: 'warm',
-    dealbreakers: [],
-    autoSuggest: true,
-  });
-  const [agentLog, setAgentLog] = useState<AgentAction[]>([]);
+  const [profile, setProfile] = useState<ApiProfile | null>(null);
+  const [matches, setMatches] = useState<ApiMatch[]>([]);
+  const [events, setEvents] = useState<ApiEvent[]>([]);
+  const [agent, setAgent] = useState<AgentConfig>({ registered: false, walletAddress: null, ...DEFAULT_PREFS });
+  const [agentLog, setAgentLog] = useState<ApiAgentAction[]>([]);
+  const [agentUsage, setAgentUsage] = useState<ApiAgentUsage | null>(null);
+
+  useEffect(() => {
+    loadPrefs().then((prefs) => setAgent((prev) => ({ ...prev, ...prefs })));
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    const me = await getMe().catch(() => null);
+    if (!me) return;
+    setProfile(me.profile);
+    if (me.user) {
+      setTier(me.user.tier);
+      setGenderEstimate(me.user.genderEstimate ?? null);
+      const wallet = me.user.wallet;
+      setAgent((prev) => (wallet ? { ...prev, registered: true, walletAddress: wallet } : prev));
+    }
+  }, []);
+
+  const refreshMatches = useCallback(async () => {
+    const m = await getMatches().catch(() => null);
+    if (m) setMatches(m);
+  }, []);
+
+  const refreshEvents = useCallback(async () => {
+    const e = await getEvents().catch(() => null);
+    if (e) setEvents(e);
+  }, []);
+
+  const refreshAgentLog = useCallback(async () => {
+    const res = await getAgentActions().catch(() => null);
+    if (!res) return;
+    setAgentLog(res.actions);
+    setAgentUsage(res.usage);
+  }, []);
+
+  const updateAgent = useCallback((patch: Partial<AgentConfig>) => {
+    setAgent((prev) => {
+      const next = { ...prev, ...patch };
+      savePrefs({ icebreakerStyle: next.icebreakerStyle, dealbreakers: next.dealbreakers, autoSuggest: next.autoSuggest });
+      return next;
+    });
+  }, []);
+
+  const revokeAgentAction = useCallback(async (id: string) => {
+    setAgentLog((prev) => prev.map((a) => (a.id === id ? { ...a, revoked: true } : a)));
+    await apiRevokeAgentAction(id).catch(() => undefined);
+  }, []);
 
   const value = useMemo<AppState>(
     () => ({
-      tier,
-      selfieCredential,
-      genderEstimate,
-      verifiedOnly,
-      matches,
-      agent,
-      agentLog,
-      rsvpEvents,
-      setTier,
-      setSelfieCredential,
-      setGenderEstimate,
-      setVerifiedOnly,
-      addMatch: (p) =>
-        setMatches((prev) =>
-          prev.some((m) => m.profile.id === p.id)
-            ? prev
-            : [...prev, { profile: p, firstMessageUnlocked: false, messages: [] }]
-        ),
-      unlockFirstMessage: (profileId) =>
-        setMatches((prev) =>
-          prev.map((m) => (m.profile.id === profileId ? { ...m, firstMessageUnlocked: true } : m))
-        ),
-      sendMessage: (profileId, text, viaAgent) =>
-        setMatches((prev) =>
-          prev.map((m) =>
-            m.profile.id === profileId
-              ? { ...m, messages: [...m.messages, { from: 'me', text, viaAgent, at: Date.now() }] }
-              : m
-          )
-        ),
-      updateAgent: (patch) => setAgent((prev) => ({ ...prev, ...patch })),
-      logAgentAction: (a) =>
-        setAgentLog((prev) => [{ ...a, id: `act_${Date.now()}`, at: Date.now() }, ...prev]),
-      revokeAgentAction: (id) => setAgentLog((prev) => prev.filter((a) => a.id !== id)),
-      toggleRsvp: (eventId) =>
-        setRsvpEvents((prev) =>
-          prev.includes(eventId) ? prev.filter((e) => e !== eventId) : [...prev, eventId]
-        ),
+      tier, selfieCredential, genderEstimate, verifiedOnly, profile, matches, events, agent, agentLog, agentUsage,
+      setTier, setSelfieCredential, setGenderEstimate, setVerifiedOnly, setProfile,
+      refreshProfile, refreshMatches, refreshEvents, refreshAgentLog, updateAgent, revokeAgentAction,
     }),
-    [tier, selfieCredential, genderEstimate, verifiedOnly, matches, agent, agentLog, rsvpEvents]
+    [tier, selfieCredential, genderEstimate, verifiedOnly, profile, matches, events, agent, agentLog, agentUsage, refreshProfile, refreshMatches, refreshEvents, refreshAgentLog, updateAgent, revokeAgentAction]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -118,5 +137,3 @@ export function useApp(): AppState {
   if (!ctx) throw new Error('useApp must be used within AppProvider');
   return ctx;
 }
-
-export { DISCOVERY_DECK };

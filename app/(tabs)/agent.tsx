@@ -1,28 +1,75 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Linking } from 'react-native';
+import { useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Linking, TextInput } from 'react-native';
 import { colors, spacing, font, radius } from '../../src/theme';
 import { useApp } from '../../src/lib/store';
 import { Button } from '../../src/components/Button';
-import { WORLD_CHAIN } from '../../src/agent/agentkit';
+import { WORLD_CHAIN, agentDiagnostics } from '../../src/agent/agentkit';
+import { saveWallet } from '../../src/api';
 import { useWallet } from '../../src/wallet/useWallet';
-import { FAUCET_URL, TOPUP_ETH } from '../../src/wallet/chain';
+import { TOPUP_ETH } from '../../src/wallet/chain';
+import { topUpAgent, creditTopUpFromTx, TopUpResult } from '../../src/wallet/topup';
+import { TOPUP_ADDRESS } from '../../src/wallet/chain';
 
 const STYLES: Array<'warm' | 'witty' | 'direct'> = ['warm', 'witty', 'direct'];
 
+const KIND_LABEL: Record<string, string> = { screen: 'Pre-screened a profile', context: 'Read match context', icebreaker: 'Drafted an opener', reply: 'Drafted a reply', send: 'Sent a message' };
+
 export default function AgentScreen() {
-  const { agent, updateAgent, agentLog, revokeAgentAction } = useApp();
+  const { agent, updateAgent, agentLog, agentUsage, refreshAgentLog, revokeAgentAction } = useApp();
+  useFocusEffect(useCallback(() => { refreshAgentLog(); }, [refreshAgentLog]));
   const wallet = useWallet();
   const [registering, setRegistering] = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
+  const [toppingUp, setToppingUp] = useState(false);
+  const [topUp, setTopUp] = useState<TopUpResult | null>(null);
+  const [txHash, setTxHash] = useState('');
+  const [crediting, setCrediting] = useState(false);
+  const [credit, setCredit] = useState<TopUpResult | null>(null);
 
-  function register() {
+  async function register() {
+    setRegisterError(null);
+    if (!wallet.enabled) {
+      setRegisterError('No wallet available. Set EXPO_PUBLIC_PRIVY_APP_ID to enable the wallet.');
+      return;
+    }
+    if (wallet.error) {
+      setRegisterError(`Wallet setup failed: ${wallet.error}`);
+      return;
+    }
+    if (!wallet.address) {
+      setRegisterError('Wallet is still provisioning. Try again in a moment.');
+      return;
+    }
     setRegistering(true);
-    setTimeout(() => {
-      updateAgent({
-        registered: true,
-        walletAddress: wallet.address ?? '0x' + Math.random().toString(16).slice(2, 10) + '...a9f2',
-      });
+    try {
+      await saveWallet(wallet.address);
+      updateAgent({ registered: true, walletAddress: wallet.address });
+    } catch (e) {
+      setRegisterError(e instanceof Error ? e.message : 'could not register agent');
+    } finally {
       setRegistering(false);
-    }, 1500);
+    }
+  }
+
+  async function creditFromHash() {
+    setCrediting(true);
+    setCredit(null);
+    const result = await creditTopUpFromTx(txHash);
+    setCredit(result);
+    setCrediting(false);
+    if (result.ok) {
+      setTxHash('');
+      refreshAgentLog();
+    }
+  }
+
+  async function runTopUp() {
+    setToppingUp(true);
+    setTopUp(null);
+    const result = await topUpAgent();
+    setTopUp(result);
+    setToppingUp(false);
   }
 
   return (
@@ -33,7 +80,14 @@ export default function AgentScreen() {
           <>
             <Text style={styles.status}>Registered in AgentBook</Text>
             <Text style={styles.mono}>{agent.walletAddress}</Text>
-            <Text style={styles.chain}>Resolves on World Chain {WORLD_CHAIN}</Text>
+            <Text style={styles.chain}>Resolves on World Chain {WORLD_CHAIN}. Linked to your World ID, restored on every login.</Text>
+            {wallet.address && agent.walletAddress && wallet.address.toLowerCase() !== agent.walletAddress.toLowerCase() && (
+              <>
+                <Text style={styles.error}>This device's wallet differs from the linked agent wallet. Re-link to use the agent here.</Text>
+                <Button label="Re-link this device's wallet" onPress={register} variant="secondary" loading={registering} disabled={registering} />
+                {registerError && <Text style={styles.error}>{registerError}</Text>}
+              </>
+            )}
           </>
         ) : (
           <>
@@ -41,7 +95,19 @@ export default function AgentScreen() {
               Register a human-backed agent. It acts in your chats and its every action is verified against
               AgentBook so matches know a real, unique human is behind it.
             </Text>
-            <Button label="Register agent" onPress={register} variant="agent" loading={registering} />
+            {wallet.enabled && (
+              <Text style={styles.chain}>
+                {wallet.address ? `Wallet ${wallet.address}` : wallet.busy ? 'Provisioning wallet...' : 'Wallet not provisioned'}
+              </Text>
+            )}
+            <Button label="Register agent" onPress={register} variant="agent" loading={registering} disabled={registering} />
+            {wallet.error && (
+              <>
+                <Text style={styles.error}>Wallet setup failed: {wallet.error}</Text>
+                <Button label="Retry wallet setup" onPress={wallet.retry} variant="secondary" loading={wallet.busy} disabled={wallet.busy} />
+              </>
+            )}
+            {registerError && !wallet.error && <Text style={styles.error}>{registerError}</Text>}
           </>
         )}
       </View>
@@ -56,7 +122,45 @@ export default function AgentScreen() {
                 When the free trial runs out, the agent settles a {TOPUP_ETH} ETH top-up on World Chain Sepolia
                 to continue. Fund this wallet from the testnet faucet.
               </Text>
-              <Button label="Open Sepolia faucet" onPress={() => Linking.openURL(FAUCET_URL)} variant="secondary" />
+              <Button label="Top up agent" onPress={runTopUp} loading={toppingUp} disabled={toppingUp || !wallet.ready} />
+              {topUp && topUp.ok && (
+                <>
+                  <Text style={styles.status}>Credited {topUp.credited} calls</Text>
+                  {topUp.explorerUrl && (
+                    <Pressable onPress={() => Linking.openURL(topUp.explorerUrl!)}>
+                      <Text style={styles.link}>View transaction</Text>
+                    </Pressable>
+                  )}
+                </>
+              )}
+              {topUp && !topUp.ok && (
+                <>
+                  <Text style={styles.error}>{topUp.error ?? 'top-up failed'}</Text>
+                  {topUp.hash && (
+                    <>
+                      <Text style={styles.chain}>Payment sent: {topUp.hash}</Text>
+                      <Button label="Retry crediting this payment" onPress={() => { setTxHash(topUp.hash!); creditFromHash(); }} variant="secondary" loading={crediting} disabled={crediting} />
+                    </>
+                  )}
+                </>
+              )}
+
+              <Text style={styles.cardTitle}>Paid from another wallet?</Text>
+              <Text style={styles.desc}>
+                Send at least {TOPUP_ETH} ETH on World Chain Sepolia to {TOPUP_ADDRESS} from any wallet, then paste the transaction hash to credit your agent.
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0x transaction hash"
+                placeholderTextColor={colors.textFaint}
+                value={txHash}
+                onChangeText={setTxHash}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Button label="Credit from transaction" onPress={creditFromHash} variant="secondary" loading={crediting} disabled={crediting || txHash.trim().length === 0} />
+              {credit && credit.ok && <Text style={styles.status}>Credited {credit.credited} calls</Text>}
+              {credit && !credit.ok && <Text style={styles.error}>{credit.error}</Text>}
             </View>
           )}
 
@@ -87,24 +191,50 @@ export default function AgentScreen() {
           </View>
 
           <View style={styles.card}>
+            <Text style={styles.cardTitle}>Continuity quota</Text>
+            {agentUsage ? (
+              <>
+                <Text style={styles.status}>{agentUsage.remaining} calls remaining</Text>
+                <Text style={styles.desc}>
+                  {agentUsage.used} used of {agentUsage.freeTrial} free trial calls plus {agentUsage.credit} credited on-chain. The quota is
+                  tied to your World ID, so it follows you across devices and agents.
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.empty}>Loading quota...</Text>
+            )}
+          </View>
+
+          <View style={styles.card}>
             <Text style={styles.cardTitle}>Action log</Text>
-            <Text style={styles.desc}>Every verified agent call. Revoke any action.</Text>
+            <Text style={styles.desc}>Every call your agent made through the AgentKit-protected backend. Revoke any action.</Text>
+            {(() => {
+              const d = agentDiagnostics();
+              if (!d.gate && !d.headerError) return null;
+              return (
+                <Text style={styles.chain}>
+                  Last call: {d.gate ?? 'unknown'}{d.headerError ? ` (client could not sign header: ${d.headerError})` : ''}
+                </Text>
+              );
+            })()}
             {agentLog.length === 0 ? (
-              <Text style={styles.empty}>No actions yet. Open a chat and tap Agent.</Text>
+              <Text style={styles.empty}>No actions yet. Ask the agent in Discover or a chat.</Text>
             ) : (
               agentLog.map((a) => (
-                <View key={a.id} style={styles.logRow}>
+                <View key={a.id} style={[styles.logRow, a.revoked && styles.logRevoked]}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.logKind}>
-                      {a.kind} to {a.matchName} {a.verified ? '(verified)' : '(unverified)'}
+                      {KIND_LABEL[a.kind] ?? a.kind} {a.agentBacked ? '(AgentBook verified)' : '(fallback gate)'}
                     </Text>
-                    <Text style={styles.logDetail} numberOfLines={1}>
-                      {a.detail}
-                    </Text>
+                    <Text style={styles.logDetail} numberOfLines={2}>{a.detail}</Text>
                   </View>
-                  <Pressable onPress={() => revokeAgentAction(a.id)}>
-                    <Text style={styles.revoke}>Revoke</Text>
-                  </Pressable>
+                  {a.revoked ? (
+                    <Text style={styles.revoked}>Revoked</Text>
+                  ) : (
+                    <Pressable onPress={() => revokeAgentAction(a.id)}>
+                      <Text style={styles.revoke}>Revoke</Text>
+                    </Pressable>
+                  )}
                 </View>
               ))
             )}
@@ -123,6 +253,9 @@ const styles = StyleSheet.create({
   status: { color: colors.agent, fontSize: font.size.sm, fontWeight: font.weight.semibold },
   mono: { color: colors.text, fontSize: font.size.sm, fontFamily: 'monospace' },
   chain: { color: colors.textFaint, fontSize: font.size.xs },
+  link: { color: colors.accent, fontSize: font.size.sm, fontWeight: font.weight.semibold },
+  error: { color: colors.danger, fontSize: font.size.sm },
+  input: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: colors.text, fontSize: font.size.sm, fontFamily: 'monospace' },
   styleRow: { flexDirection: 'row', gap: spacing.sm },
   stylePill: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
   stylePillActive: { backgroundColor: colors.agent, borderColor: colors.agent },
@@ -132,7 +265,9 @@ const styles = StyleSheet.create({
   switchLabel: { color: colors.text, fontSize: font.size.sm },
   empty: { color: colors.textFaint, fontSize: font.size.sm },
   logRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
-  logKind: { color: colors.text, fontSize: font.size.sm, fontWeight: font.weight.medium, textTransform: 'capitalize' },
+  logKind: { color: colors.text, fontSize: font.size.sm, fontWeight: font.weight.medium },
   logDetail: { color: colors.textFaint, fontSize: font.size.xs },
   revoke: { color: colors.danger, fontSize: font.size.sm, fontWeight: font.weight.semibold },
+  revoked: { color: colors.textFaint, fontSize: font.size.sm },
+  logRevoked: { opacity: 0.5 },
 });
